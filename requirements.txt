@@ -1,0 +1,9 @@
+osmnx>=1.9
+networkx>=3.2
+geopandas>=0.14
+shapely>=2.0
+pyproj>=3.6
+matplotlib>=3.8
+pandas>=2.1
+gpxpy>=1.6
+rtree>=1.2
