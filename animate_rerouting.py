@@ -15,26 +15,29 @@ def movement_to_node_path(movement_path):
         node_ids.append(v)
     return node_ids
 
-def get_corridor_movement(G, M_policy, target_node=None, target_type=None):
+def get_corridor_movement(G, M_policy):
     """
-    Choose a detour movement on the Rustavelli corridor.
-    Filters candidate movements to those whose entry or exit edge is on the corridor.
-    You can also filter by intersection node ID or turn type ('left' or 'uturn').
+    Examine all candidate movements and choose the one whose detour route covers
+    the most nodes (i.e. the 'longest' detour). This tends to pick a side-street
+    left turn across the corridor that forces a full block loop.
     """
+    best_path = None
+    best_len = 0
     for mv in candidate_movements(G):
-        # filter by node or type if specified
-        if target_node is not None and mv["node"] != target_node:
-            continue
-        if target_type is not None and mv["type"] != target_type:
-            continue
+        # compute the policy path for this movement
+        path = shortest_path_movement(M_policy, mv["entry_edge"], mv["policy_exit_edge"])
+        # convert movement edges to node IDs
+        node_path = movement_to_node_path(path)
+        # skip trivial detours that only change direction
+        if len(node_path) > best_len:
+            best_len = len(node_path)
+            best_path = path
+    if best_path is None:
+        # fall back to the first candidate
+        mv = next(candidate_movements(G))
+        best_path = shortest_path_movement(M_policy, mv["entry_edge"], mv["policy_exit_edge"])
+    return best_path
 
-        # check if either the entry or exit edge belongs to the corridor
-        u, v, k = mv["entry_edge"]
-        entry_corridor = G[u][v][k].get("is_corridor", False)
-        u2, v2, k2 = mv["policy_exit_edge"]
-        exit_corridor = G[u2][v2][k2].get("is_corridor", False)
-        if entry_corridor or exit_corridor:
-            return shortest_path_movement(M_policy, mv["entry_edge"], mv["policy_exit_edge"])
 
     # Fallback: return the first candidate if none match
     mv = next(candidate_movements(G))
