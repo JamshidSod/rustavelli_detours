@@ -9,10 +9,13 @@ def turn_delta(b_in, b_out):
 
 def turn_type(delta):
     ad = abs(delta)
-    if ad > UTURN_MIN: return "uturn"
-    if ad <= THROUGH_MAX: return "through"
-    # else left or right by sign (right if +, left if −)
-    return "right" if delta > 0 else "left"
+    if ad > UTURN_MIN:
+        return "uturn"
+    if ad <= THROUGH_MAX:
+        return "through"
+    # If delta > 0, treat it as a LEFT; if delta < 0, treat it as a RIGHT
+    return "left" if delta > 0 else "right"
+
 
 def is_perp(delta, tol=PERP_TOL):
     return abs(abs(delta) - 90) <= tol
