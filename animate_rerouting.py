@@ -33,23 +33,38 @@ def get_corridor_movement(G, M_policy):
 def crop_graph_to_route(org_graph, route_nodes, buffer_m=300):
     """
     Create a subgraph containing all nodes within `buffer_m` meters of the route.
-    This keeps the plot focused around the detour.
+    org_graph is the unprojected graph (lat/lon) returned by ox.project_graph(..., to_crs="EPSG:4326").
     """
-    # Get lat/lon of route nodes
+    import math
+
+    # gather route lat/lon
     lats = [org_graph.nodes[n]['y'] for n in route_nodes]
     lons = [org_graph.nodes[n]['x'] for n in route_nodes]
-    # Compute bounding box
+
+    # bounding box for route
     north, south = max(lats), min(lats)
-    east, west  = max(lons), min(lons)
-    # Expand the box by ~buffer_m (approx degrees)
-    # 1 deg lat ~ 111 km; 1 deg lon ~ 111 km * cos(lat)
+    east, west = max(lons), min(lons)
+
+    # approximate degree padding based on metres
+    # 1 deg lat ~= 111 km; 1 deg lon ~= 111 km * cos(lat)
+    avg_lat_rad = math.radians(sum(lats) / len(lats))
     pad_lat = buffer_m / 111_000
-    pad_lon = buffer_m / (111_000 * abs(__import__('math').cos(sum(lats)/len(lats) * __import__('math').pi/180)))
+    pad_lon = buffer_m / (111_000 * abs(math.cos(avg_lat_rad)))
+
     bbox_north = north + pad_lat
     bbox_south = south - pad_lat
     bbox_east  = east + pad_lon
     bbox_west  = west - pad_lon
-    return ox.utils_graph.graph_from_bbox(bbox_north, bbox_south, bbox_east, bbox_west, network_type='drive')
+
+    # filter nodes within the expanded box
+    nodes_in_bbox = [
+        n for n, data in org_graph.nodes(data=True)
+        if bbox_south <= data['y'] <= bbox_north and bbox_west <= data['x'] <= bbox_east
+    ]
+
+    # return an induced subgraph (copy to detach from original)
+    return org_graph.subgraph(nodes_in_bbox).copy()
+
 
 def main():
     # Build graphs
