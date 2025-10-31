@@ -73,17 +73,18 @@ def build_movement_graph(
             incoming_on_corridor = d1.get("is_corridor", False)
             outgoing_on_corridor = d2.get("is_corridor", False)
 
-            # Detect if this move crosses the corridor median:
-            # It crosses if exactly one of the edges is on the corridor.
+            # Detect cross‑corridor movement
             crosses_corridor = incoming_on_corridor != outgoing_on_corridor
 
             if corridor_node and crosses_corridor:
-                # Only allow cross-corridor movement at whitelisted nodes
-                if crossings_whitelist is None or v not in crossings_whitelist:
-                    allowed = False
-                elif enforce_perp_crossing and not is_perp(delta):
-                    # At whitelisted nodes, enforce ~90° crossing
-                    allowed = False
+                if crossings_whitelist is not None:
+                    # Restrict crossings unless node is whitelisted
+                    if v not in crossings_whitelist:
+                        allowed = False
+                    elif enforce_perp_crossing and not is_perp(delta):
+                        allowed = False
+            # If crossings_whitelist is None, we are in baseline mode: allow crossing
+
 
             if allowed:
                 move_cost = float(d2.get("travel_time", 0.0)) + turn_delay
