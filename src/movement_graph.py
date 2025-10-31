@@ -4,21 +4,18 @@ from .config import THROUGH_MAX, UTURN_MIN, TURN_DELAY_S, PERP_TOL
 def turn_delta(b_in, b_out):
     """Return the turn angle difference in degrees within (–180, 180]."""
     incoming_heading = (b_in + 180) % 360
-    d = (b_out - incoming_heading + 540) % 360 - 180
-    return d
+    return (b_out - incoming_heading + 540) % 360 - 180
 
 def turn_type(delta):
     """
     Classify turn type based on absolute angle.
-    We don't rely on the sign for cross-corridor logic anymore.
+    The sign is used only for labeling (left/right).
     """
     ad = abs(delta)
     if ad > UTURN_MIN:
         return "uturn"
     if ad <= THROUGH_MAX:
         return "through"
-    # We return 'left' or 'right' purely for informational purposes.
-    # You can flip the sign here if needed.
     return "left" if delta > 0 else "right"
 
 def is_perp(delta, tol=PERP_TOL):
@@ -33,28 +30,33 @@ def build_movement_graph(
     turn_delay=TURN_DELAY_S,
 ):
     """
-    Build a movement graph with strict no-cross-corridor rules.
-    - At any node touching the corridor, movements that change the
-      corridor/non-corridor status are forbidden unless the node is in
-      crossings_whitelist.
-    - At whitelisted crossings, require ~90° angles if enforce_perp_crossing=True.
-    - Right-turns and through-movements that stay on the same side of the corridor are allowed.
+    Construct an edge-based movement graph.
+
+    Parameters
+    ----------
+    G : MultiDiGraph
+        The projected street graph with edge bearings and 'is_corridor' attributes.
+    crossings_whitelist : set or None
+        Node IDs where cross-corridor movements are allowed. If None, crossings are unrestricted.
+    enforce_perp_crossing : bool
+        If True, require ~90° angles at whitelisted crossings.
+    turn_delay : float
+        Turn penalty (seconds) added to the travel time of each movement.
     """
     M = nx.DiGraph()
     M.graph["ref_graph"] = G
 
-    # Add a node in M for each directed edge in G
-    for u, v, k, data in G.edges(keys=True, data=True):
-        # skip zero-length edges
-        if data.get("length", 0) <= 0:
-            continue
-        M.add_node((u, v, k), **data)
-
-    # Helper to test if a graph node touches the corridor
+    # helper: does a graph node touch the corridor?
     def is_corridor_node(n):
         return any(d.get("is_corridor", False) for *_, d in G.in_edges(n, keys=True, data=True)) or \
                any(d.get("is_corridor", False) for *_, d in G.out_edges(n, keys=True, data=True))
 
+    # add nodes (one per directed edge)
+    for u, v, k, data in G.edges(keys=True, data=True):
+        if data.get("length", 0) > 0:
+            M.add_node((u, v, k), **data)
+
+    # add allowed movements
     for u, v, k1, d1 in G.edges(keys=True, data=True):
         b_in = d1.get("bearing")
         if b_in is None:
@@ -72,19 +74,16 @@ def build_movement_graph(
             corridor_node = is_corridor_node(v)
             incoming_on_corridor = d1.get("is_corridor", False)
             outgoing_on_corridor = d2.get("is_corridor", False)
-
-            # Detect cross‑corridor movement
             crosses_corridor = incoming_on_corridor != outgoing_on_corridor
 
             if corridor_node and crosses_corridor:
+                # Only restrict crossings if a whitelist is provided.
                 if crossings_whitelist is not None:
-                    # Restrict crossings unless node is whitelisted
                     if v not in crossings_whitelist:
                         allowed = False
                     elif enforce_perp_crossing and not is_perp(delta):
                         allowed = False
-            # If crossings_whitelist is None, we are in baseline mode: allow crossing
-
+                # If crossings_whitelist is None, baseline mode → allow crossing
 
             if allowed:
                 move_cost = float(d2.get("travel_time", 0.0)) + turn_delay
