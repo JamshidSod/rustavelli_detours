@@ -35,8 +35,8 @@ def run():
 
     lines_for_geo = []
 
-    def saverow(mv, pb, pp):
-        ln = movement_path_to_linestring(G, pp)
+    def saverow(mv, path_baseline, path_policy):
+        ln = movement_path_to_linestring(G, path_policy)  # use projected G here
         props = {"name": f"{mv['type']}_node_{mv['node']}"}
         lines_for_geo.append((ln, props))
 
